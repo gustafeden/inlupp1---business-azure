@@ -3,25 +3,6 @@
 #include <ArduinoJson.h>
 #include <DHT.h>
 
-#if SIMULATED_DATA
-
-void initSensor()
-{
-	// use SIMULATED_DATA, no sensor need to be inited
-}
-
-float readTemperature()
-{
-	return random(20, 30);
-}
-
-float readHumidity()
-{
-	return random(30, 40);
-}
-
-#else
-
 static DHT dht(DHT_PIN, DHT_TYPE);
 void initSensor()
 {
@@ -38,7 +19,6 @@ float readHumidity()
 	return dht.readHumidity();
 }
 
-#endif
 
 bool readMessage(char *payload)
 {
@@ -48,12 +28,11 @@ bool readMessage(char *payload)
 	StaticJsonBuffer<MESSAGE_MAX_LEN> jsonBuffer;
 	JsonObject &root = jsonBuffer.createObject();
 	root["deviceId"] = DEVICE_ID;
-	root["datetime"] = time(NULL);
+	root["datetime"] = (String)time(NULL);
 
 
 	bool temperatureAlert = false;
 
-	// NAN is not the valid json, change it to NULL
 	if (std::isnan(temperature))
 	{
 		root["temperature"] = NULL;
@@ -89,11 +68,11 @@ void parseTwinMessage(char *message)
 		return;
 	}
 
-	if (root["desired"]["interval"].success())
+	if (root["desired"]["send_interval"].success())
 	{
 		send_interval = root["desired"]["send_interval"];
 	}
-	else if (root.containsKey("interval"))
+	else if (root.containsKey("send_interval"))
 	{
 		send_interval = root["send_interval"];
 	}
@@ -102,7 +81,7 @@ void parseTwinMessage(char *message)
 	{
 		check_interval = root["desired"]["check_interval"];
 	}
-	else if (root.containsKey("interval"))
+	else if (root.containsKey("check_interval"))
 	{
 		check_interval = root["check_interval"];
 	}

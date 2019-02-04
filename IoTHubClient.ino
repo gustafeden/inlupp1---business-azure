@@ -71,7 +71,6 @@ IOTHUBMESSAGE_DISPOSITION_RESULT receiveMessageCallback(IOTHUB_MESSAGE_HANDLE me
 	}
 	else
 	{
-		/*buffer is not zero terminated*/
 		char *temp = (char *)malloc(size + 1);
 
 		if (temp == NULL)
@@ -107,9 +106,6 @@ int deviceMethodCallback(
 	else if (strcmp(methodName, "stop") == 0)
 	{
 		stop();
-	}
-	else if (strcmp(methodName, "resetEEPROM") == 0) {
-		eraseEEPROM();
 	}
 	else
 	{

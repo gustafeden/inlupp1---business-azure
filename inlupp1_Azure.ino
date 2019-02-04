@@ -8,7 +8,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <WiFiClientSecure.h>
-#include <WiFiUdp.h>
 
 #include <AzureIoTHub.h>
 #include <AzureIoTProtocol_MQTT.h>
@@ -17,16 +16,21 @@
 #include "config.h"
 static bool messagePending = false;
 static bool messageSending = true;
+static bool buttonPressed = false;
+static bool checkAlert = false;
 
 static char *connectionString = "HostName=assignment-3-IoTHub.azure-devices.net;DeviceId=TempSensor;SharedAccessKey=8r0KvOubhuSpyH7MOdXYgaJBbQU/BhTjIvjmMdOi4+w=";
 
 
-static int send_interval = SEND_INTERVAL * 1e3;
-static int check_interval = CHECK_INTERVAL * 1e6;
+static int send_interval = SEND_INTERVAL;
+static int check_interval = CHECK_INTERVAL;
 ESP8266WiFiMulti wifiMulti;
 
 unsigned long currentMillis;
 unsigned long lastSentMillis;
+unsigned long lastCheckedMillis;
+unsigned long lastButtonCheckMillis;
+
 
 static IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
 
@@ -37,6 +41,12 @@ void blinkLED()
 	digitalWrite(LED_PIN, LOW);
 }
 
+void initSerial()
+{
+	Serial.begin(115200);
+	Serial.setDebugOutput(true);
+	Serial.println("Serial successfully initiated.");
+}
 void initMultiWifi() {
 
 	wifiMulti.addAP("iPhone x", "hejhejhej");
@@ -84,81 +94,60 @@ void initIoTClient() {
 		Serial.println("Failed on IoTHubClient_CreateFromConnectionString.");
 		while (1);
 	}
-	//lastSentMillis = 0;
 
 	IoTHubClient_LL_SetOption(iotHubClientHandle, "product_info", "FeatherHuzzah");
 	IoTHubClient_LL_SetMessageCallback(iotHubClientHandle, receiveMessageCallback, NULL);
 	IoTHubClient_LL_SetDeviceMethodCallback(iotHubClientHandle, deviceMethodCallback, NULL);
 	IoTHubClient_LL_SetDeviceTwinCallback(iotHubClientHandle, twinCallback, NULL);
 }
-
-void setup()
-{
+void setup() {
 	pinMode(LED_PIN, OUTPUT);
+	pinMode(BUTTON_PIN, INPUT);
 	initSerial();
 	Serial.setTimeout(2000);
+	delay(600);
 
-	String resetReason = ESP.getResetReason();
-	Serial.println(resetReason);
-	if (resetReason == "Deep-Sleep Wake") {
-		initMultiWifi();
-		initTime();
-		initSensor();
-		String fromEEPROM = readEEPROM();
-		String currentTime = (String)time(NULL);
-		if (fromEEPROM.length > 1) {
-			writeEEPROM(currentTime);
-			if (currentTime.toInt() - fromEEPROM.toInt() >= send_interval) {
-				
-				initIoTClient();
-				delay(200);
-				char messagePayload[MESSAGE_MAX_LEN];
-				bool temperatureAlert = readMessage(messagePayload);
-				sendMessage(iotHubClientHandle, messagePayload, temperatureAlert, "temperature");
-				IoTHubClient_LL_DoWork(iotHubClientHandle);
-				delay(200);
-				ESP.deepSleep(check_interval);
-			}
-			else {
-				char messagePayload[MESSAGE_MAX_LEN];
-				bool temperatureAlert = readMessage(messagePayload);
-				if (temperatureAlert) {
-					initIoTClient();
-					delay(200);
-
-				}
-
-			}
-		}
-		else {
-			writeEEPROM(currentTime);
-		}
-	}
-	else {
-		ESP.deepSleep(1e6);
-	}
-
-	//initMultiWifi();
-	//initTime();
-	//initSensor();
-
+	initSensor();
 	
+	initMultiWifi();
+	initTime();
+	initIoTClient();
 }
-
 void loop()
 {
-//	currentMillis = millis();
-	/*
-	if (!messagePending && messageSending && currentMillis - lastSentMillis > send_interval)
+	currentMillis = millis();
+	if (messageSending && currentMillis - lastButtonCheckMillis > 30 && currentMillis - lastSentMillis > 1000) {
+		lastButtonCheckMillis = currentMillis;
+		if (digitalRead(BUTTON_PIN) == HIGH)
+			buttonPressed = true;
+	}
+	if (!messagePending && messageSending && buttonPressed) {
+		buttonPressed = false;
+		lastSentMillis = currentMillis;
+		lastCheckedMillis = currentMillis;
+		char messagePayload[MESSAGE_MAX_LEN];
+		bool temperatureAlert = readMessage(messagePayload);
+		sendMessage(iotHubClientHandle, messagePayload, true, "ButtonPress");
+	}
+	else if (!messagePending && messageSending && currentMillis - lastSentMillis > send_interval)
 	{
 		lastSentMillis = currentMillis;
+		lastCheckedMillis = currentMillis;
 		char messagePayload[MESSAGE_MAX_LEN];
 		bool temperatureAlert = readMessage(messagePayload);
 		sendMessage(iotHubClientHandle, messagePayload, temperatureAlert, "temperature");
-		//delay(interval);
-		//ESP.deepSleep(20e6);
+	}
+	else if (!messagePending && messageSending && currentMillis - lastCheckedMillis > check_interval && currentMillis - lastSentMillis < send_interval) {
+		lastCheckedMillis = currentMillis;
+		char messagePayload[MESSAGE_MAX_LEN];
+		bool temperatureAlert = readMessage(messagePayload);
+		if (temperatureAlert) {
+			sendMessage(iotHubClientHandle, messagePayload, temperatureAlert, "temperature");
+			lastSentMillis = currentMillis;
+		}
+			
 	}
 	IoTHubClient_LL_DoWork(iotHubClientHandle);
 	delay(10);
-	*/
+	
 }

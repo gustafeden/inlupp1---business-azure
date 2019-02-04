@@ -1,6 +1,6 @@
 ﻿#include <EEPROM.h>
 
-
+//EEPROM NO LONGER USED
 
 String readEEPROM()
 {
@@ -8,7 +8,7 @@ String readEEPROM()
 	char str_buf[20] = "";
 	uint addr = 0;
 
-	EEPROM.begin(EEPROM_SIZE);
+	EEPROM.begin(512);
 
 	EEPROM.get(addr, str_buf);
 	
@@ -21,15 +21,10 @@ bool writeEEPROM(String buf)
 
 	buf.toCharArray(str_buf, 20);
 
-	EEPROM.begin(EEPROM_SIZE);
+	EEPROM.begin(512);
 
 	EEPROM.put(addr, str_buf);
 
 	return EEPROM.commit();
-}
-
-void eraseEEPROM()
-{
-
 }
 
